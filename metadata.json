@@ -1,0 +1,5 @@
+{
+  "name": "Simulador",
+  "description": "Aplicativo de simulação de impacto da reforma tributária (IBS/CBS) através da importação de arquivos EFD Contribuições, com suporte a multi-tenancy e hierarquia empresarial.",
+  "requestFramePermissions": []
+}
