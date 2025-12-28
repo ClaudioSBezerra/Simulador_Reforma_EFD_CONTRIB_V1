@@ -1,6 +1,7 @@
 
 export enum UserRole {
-  USER = 'USER'
+  USER = 'USER',
+  MASTER = 'MASTER'
 }
 
 export interface Tenant {
@@ -31,10 +32,9 @@ export interface Branch {
 export interface User {
   id: string;
   email: string;
-  password?: string;
   role: UserRole;
   tenantId: string;
-  companyId: string; // Linked directly to a company
+  companyId: string;
   confirmed: boolean;
 }
 
@@ -48,7 +48,7 @@ export interface TaxRateYear {
 export interface SpedC100 {
   cnpj: string;
   dtDoc: string;
-  indOper: number; // 0=In, 1=Out
+  indOper: number; // 0=Entrada, 1=Saída
   vlDoc: number;
   vlBcIcms: number;
   vlIcms: number;
@@ -66,6 +66,13 @@ export interface SpedC500 {
   vlCofins: number;
 }
 
+export interface SpedData {
+  c100: SpedC100[];
+  c500: SpedC500[]; // Créditos Energia/Água
+  c600: SpedC500[]; // Débitos Energia/Água
+  d100: SpedD100[];
+}
+
 export interface SpedD100 {
   cnpj: string;
   dtDoc: string;
@@ -75,11 +82,4 @@ export interface SpedD100 {
   vlIcms: number;
   vlPis: number;
   vlCofins: number;
-}
-
-export interface SpedData {
-  c100: SpedC100[];
-  c500: SpedC500[]; // Credits
-  c600: SpedC500[]; // Debits
-  d100: SpedD100[];
 }

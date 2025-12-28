@@ -98,24 +98,25 @@ const App: React.FC = () => {
     }
   };
 
+  // Fix: Explicitly map database 'nome' to 'name' and rename snake_case fields to camelCase
   const fetchTenants = async () => {
     const { data } = await supabase.from('tenants').select('*');
-    if (data) setTenants(data);
+    if (data) setTenants(data.map(t => ({ id: t.id, name: t.nome })));
   };
 
   const fetchGroups = async () => {
     const { data } = await supabase.from('grupos_empresariais').select('*');
-    if (data) setGroups(data.map(g => ({ ...g, tenantId: g.tenant_id })));
+    if (data) setGroups(data.map(g => ({ id: g.id, name: g.nome, tenantId: g.tenant_id })));
   };
 
   const fetchCompanies = async () => {
     const { data } = await supabase.from('empresas').select('*');
-    if (data) setCompanies(data.map(c => ({ ...c, tenantId: c.tenant_id, groupId: c.grupo_id })));
+    if (data) setCompanies(data.map(c => ({ id: c.id, name: c.nome, tenantId: c.tenant_id, groupId: c.grupo_id })));
   };
 
   const fetchBranches = async () => {
     const { data } = await supabase.from('filiais').select('*');
-    if (data) setBranches(data.map(b => ({ ...b, companyId: b.empresa_id })));
+    if (data) setBranches(data.map(b => ({ id: b.id, name: b.nome, cnpj: b.cnpj, companyId: b.empresa_id })));
   };
 
   const fetchSpedData = async () => {

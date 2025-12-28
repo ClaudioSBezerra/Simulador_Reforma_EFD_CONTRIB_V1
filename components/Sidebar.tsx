@@ -27,14 +27,23 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, user, onLogout,
         const text = ev.target?.result as string;
         const parsedData = await parseSpedFile(text);
         
-        // Find or create the efd_0000 record
-        // We link this to the user's tenant and a branch (simplified for demo)
+        // Identificar CNPJ do arquivo para vincular à filial correta
+        const fileCnpj = parsedData.c100[0]?.cnpj || '00000000000000';
+        
+        // Buscar filial correspondente no banco
+        const { data: filial } = await supabase
+          .from('filiais')
+          .select('id')
+          .eq('cnpj', fileCnpj.replace(/\D/g, ''))
+          .limit(1)
+          .single();
+
         const { data: efd0000, error: efdError } = await supabase
           .from('efd_0000')
           .insert([{
             tenant_id: user.tenantId,
-            filial_id: (await supabase.from('filiais').select('id').eq('empresa_id', user.companyId).limit(1).single()).data?.id,
-            cnpj: parsedData.c100[0]?.cnpj || '00000000000000',
+            filial_id: filial?.id,
+            cnpj: fileCnpj,
             periodo_inicio: '2023-01-01',
             periodo_fim: '2023-01-31'
           }])
@@ -43,20 +52,19 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, user, onLogout,
 
         if (efdError) throw efdError;
 
-        // Create C010 and D010 contexts
         const { data: regC010 } = await supabase.from('efd_c010').insert([{ 
           tenant_id: user.tenantId, 
           efd_0000_id: efd0000.id, 
-          cnpj: efd0000.cnpj 
+          cnpj: fileCnpj 
         }]).select().single();
 
         const { data: regD010 } = await supabase.from('efd_d010').insert([{ 
           tenant_id: user.tenantId, 
           efd_0000_id: efd0000.id, 
-          cnpj: efd0000.cnpj 
+          cnpj: fileCnpj 
         }]).select().single();
 
-        // Batch inserts for children
+        // Salvar Registros C100
         if (parsedData.c100.length > 0) {
           await supabase.from('efd_c100').insert(parsedData.c100.map(r => ({
             tenant_id: user.tenantId,
@@ -67,10 +75,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, user, onLogout,
             vl_icms: r.vlIcms,
             vl_pis: r.vlPis,
             vl_cofins: r.vlCofins,
-            dt_doc: '2023-01-15' // Mocking date for now
+            dt_doc: '2023-01-15',
+            cnpj: fileCnpj
           })));
         }
 
+        // Salvar Registros C500 (Créditos)
         if (parsedData.c500.length > 0) {
           await supabase.from('efd_c500').insert(parsedData.c500.map(r => ({
             tenant_id: user.tenantId,
@@ -80,10 +90,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, user, onLogout,
             vl_icms: r.vlIcms,
             vl_pis: r.vlPis,
             vl_cofins: r.vlCofins,
-            dt_doc: '2023-01-15'
+            dt_doc: '2023-01-15',
+            cnpj: fileCnpj
           })));
         }
 
+        // Salvar Registros D100 (Frete)
         if (parsedData.d100.length > 0) {
           await supabase.from('efd_d100').insert(parsedData.d100.map(r => ({
             tenant_id: user.tenantId,
@@ -94,15 +106,16 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, user, onLogout,
             vl_icms: r.vlIcms,
             vl_pis: r.vlPis,
             vl_cofins: r.vlCofins,
-            dt_doc: '2023-01-15'
+            dt_doc: '2023-01-15',
+            cnpj: fileCnpj
           })));
         }
 
         onDataImported();
-        alert('Dados sincronizados com o Supabase com sucesso!');
+        alert('EFD importada e processada com sucesso!');
       } catch (err) {
-        console.error('Falha no upload:', err);
-        alert('Erro ao importar para o banco de dados.');
+        console.error('Erro na importação:', err);
+        alert('Falha ao processar arquivo EFD.');
       } finally {
         setImporting(false);
       }
@@ -132,7 +145,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, user, onLogout,
   return (
     <aside className="w-72 bg-white border-r border-gray-100 flex flex-col h-full shadow-2xl z-20">
       <div className="p-8 border-b border-gray-50">
-        <div className="flex items-center space-x-3 text-indigo-600 transform hover:scale-105 transition-transform cursor-default">
+        <div className="flex items-center space-x-3 text-indigo-600">
           <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg">
             <i className="fas fa-gem"></i>
           </div>
@@ -161,38 +174,20 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, user, onLogout,
         </div>
 
         <div className="pt-4">
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            onChange={handleFileUpload} 
-            className="hidden" 
-            accept=".txt"
-          />
+          <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".txt" />
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={importing}
-            className="w-full group relative overflow-hidden flex items-center justify-center space-x-3 px-6 py-4 rounded-2xl bg-emerald-600 text-white font-black text-xs uppercase tracking-widest shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all hover:-translate-y-1 active:translate-y-0"
+            className="w-full flex items-center justify-center space-x-3 px-6 py-4 rounded-2xl bg-emerald-600 text-white font-black text-xs uppercase tracking-widest shadow-xl hover:bg-emerald-700 transition-all"
           >
-            {importing ? (
-              <i className="fas fa-circle-notch animate-spin text-lg"></i>
-            ) : (
-              <>
-                <i className="fas fa-cloud-arrow-up text-lg"></i>
-                <span>IMPORTAR EFD</span>
-              </>
-            )}
-            <div className="absolute inset-0 w-full h-full bg-white/10 -translate-x-full group-hover:translate-x-0 transition-transform duration-500"></div>
+            {importing ? <i className="fas fa-circle-notch animate-spin text-lg"></i> : <><i className="fas fa-cloud-arrow-up text-lg"></i><span>IMPORTAR EFD</span></>}
           </button>
         </div>
       </div>
 
       <div className="p-6 border-t border-gray-50 bg-gray-50/50">
-        <button
-          onClick={onLogout}
-          className="w-full flex items-center justify-center space-x-2 py-3 text-xs font-black uppercase tracking-widest text-red-500 hover:bg-red-50 rounded-xl transition-all"
-        >
-          <i className="fas fa-power-off"></i>
-          <span>Encerrar Sessão</span>
+        <button onClick={onLogout} className="w-full flex items-center justify-center space-x-2 py-3 text-xs font-black uppercase tracking-widest text-red-500 hover:bg-red-50 rounded-xl transition-all">
+          <i className="fas fa-power-off"></i><span>Encerrar Sessão</span>
         </button>
       </div>
     </aside>
